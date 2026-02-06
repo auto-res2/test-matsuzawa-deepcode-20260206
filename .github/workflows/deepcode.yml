@@ -19,7 +19,7 @@ env:
   INPUTS_DIR: ".github/workflows/inputs"
 
 jobs:
-  deepcode:
+  test-deepcode:
     name: Test DeepCode Code Generation
     runs-on: ubuntu-latest
     timeout-minutes: 60
@@ -27,11 +27,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v6
-        with:
-          python-version: "3.11"
 
       - name: Create results directory
         run: mkdir -p "$RESULTS_DIR"
@@ -75,15 +70,15 @@ jobs:
       - name: Install deepcode-hku
         run: |
           pip install --upgrade pip
-          pip install --no-cache-dir deepcode-hku
-          echo "✓ DeepCode installed"
+          pip install deepcode-hku
+          deepcode --version
 
       - name: Run DeepCode
         run: |
           OUTPUT_DIR="${{ env.RESULTS_DIR }}/generated"
           PROMPT_FILE="${{ env.RESULTS_DIR }}/prompt.txt"
-  
-          uv run python -m deepcode.cli.main_cli \
+
+          deepcode \
             --model "${{ github.event.inputs.model_name }}" \
             --prompt-file "$PROMPT_FILE" \
             --output-dir "$OUTPUT_DIR"
