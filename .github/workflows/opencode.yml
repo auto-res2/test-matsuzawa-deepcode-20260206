@@ -1,0 +1,167 @@
+name: "[Test] OpenCode Code Generation"
+
+on:
+  workflow_dispatch:
+    inputs:
+      model_name:
+        description: 'Model to use (e.g., anthropic/claude-opus-4-6, openai/gpt-4, openrouter/openai/gpt-4)'
+        required: false
+        default: 'anthropic/claude-opus-4-6'
+        type: string
+      max_retries:
+        description: 'Maximum number of retry attempts'
+        required: false
+        default: '10'
+        type: string
+
+permissions:
+  id-token: write
+  contents: write
+  actions: write
+  pull-requests: write
+
+env:
+  RESULTS_DIR: ".research/opencode-results"
+  INPUTS_DIR: ".github/workflows/inputs"
+
+jobs:
+  test-opencode:
+    name: Test OpenCode Code Generation
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create results directory
+        run: mkdir -p "$RESULTS_DIR"
+
+      - name: Copy and validate input files
+        run: |
+          # Copy input files from repo
+          cp "$INPUTS_DIR/hypothesis.json" "$RESULTS_DIR/" || {
+            echo "ERROR: hypothesis.json not found in $INPUTS_DIR"
+            exit 1
+          }
+          cp "$INPUTS_DIR/design.json" "$RESULTS_DIR/" || {
+            echo "ERROR: design.json not found in $INPUTS_DIR"
+            exit 1
+          }
+          cp "$INPUTS_DIR/prompt.txt" "$RESULTS_DIR/" || {
+            echo "ERROR: prompt.txt not found in $INPUTS_DIR"
+            exit 1
+          }
+
+          # Validate JSON files
+          jq . "$RESULTS_DIR/hypothesis.json" > /dev/null || {
+            echo "ERROR: Invalid hypothesis.json"
+            exit 1
+          }
+          echo "✓ hypothesis.json valid"
+
+          jq . "$RESULTS_DIR/design.json" > /dev/null || {
+            echo "ERROR: Invalid design.json"
+            exit 1
+          }
+          echo "✓ design.json valid"
+
+          # Check prompt file
+          [ -s "$RESULTS_DIR/prompt.txt" ] || {
+            echo "ERROR: prompt.txt is empty"
+            exit 1
+          }
+          echo "✓ prompt.txt valid ($(wc -l < "$RESULTS_DIR/prompt.txt") lines)"
+
+      - name: Build combined prompt
+        id: prompt
+        run: |
+          # Combine hypothesis, design, and prompt into a single prompt
+          cat > "$RESULTS_DIR/combined_prompt.txt" << 'EOF'
+          # Research Hypothesis and Experimental Design
+
+          ## Hypothesis
+          EOF
+
+          cat "$RESULTS_DIR/hypothesis.json" >> "$RESULTS_DIR/combined_prompt.txt"
+
+          cat >> "$RESULTS_DIR/combined_prompt.txt" << 'EOF'
+
+          ## Experimental Design
+          EOF
+
+          cat "$RESULTS_DIR/design.json" >> "$RESULTS_DIR/combined_prompt.txt"
+
+          cat >> "$RESULTS_DIR/combined_prompt.txt" << 'EOF'
+
+          ## Code Generation Instructions
+          EOF
+
+          cat "$RESULTS_DIR/prompt.txt" >> "$RESULTS_DIR/combined_prompt.txt"
+
+          echo "✓ Combined prompt created"
+
+          # Store prompt content for next step
+          {
+            echo 'prompt<<EOFPROMPT'
+            cat "$RESULTS_DIR/combined_prompt.txt"
+            echo 'EOFPROMPT'
+          } >> $GITHUB_OUTPUT
+
+      - name: Run OpenCode
+        uses: ./.github/actions/run-open-code
+        with:
+          model_name: ${{ github.event.inputs.model_name }}
+          prompt: ${{ steps.prompt.outputs.prompt }}
+          max_retries: ${{ github.event.inputs.max_retries }}
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          WANDB_API_KEY: ${{ secrets.WANDB_API_KEY }}
+          LANGFUSE_PUBLIC_KEY: ${{ secrets.LANGFUSE_PUBLIC_KEY }}
+          LANGFUSE_SECRET_KEY: ${{ secrets.LANGFUSE_SECRET_KEY }}
+          LANGFUSE_BASEURL: ${{ secrets.LANGFUSE_BASE_URL }}
+
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+
+          AZURE_OPENAI_API_KEY: ${{ secrets.AZURE_OPENAI_API_KEY }}
+          AZURE_OPENAI_ENDPOINT: ${{ secrets.AZURE_OPENAI_ENDPOINT }}
+          AZURE_OPENAI_API_VERSION: "2024-10-01-preview"
+
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+
+
+      - name: Check results
+        if: always()
+        run: |
+          echo "=== OpenCode Execution Summary ==="
+          echo "Model: ${{ github.event.inputs.model_name }}"
+          echo "Max retries: ${{ github.event.inputs.max_retries }}"
+
+          echo ""
+          echo "=== Input Files ==="
+          ls -lah "$RESULTS_DIR/"
+
+          echo ""
+          echo "=== Generated Code ==="
+          if [ -d "src" ]; then
+            find src -type f -name "*.py" | head -20
+            echo "✓ Generated Python files found"
+          else
+            echo "⚠ No src directory found"
+          fi
+
+      - name: Upload results and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: opencode-test-results-${{ github.run_id }}
+          path: |
+            ${{ env.RESULTS_DIR }}
+            src/
+            .langfuse/
+          retention-days: 30
