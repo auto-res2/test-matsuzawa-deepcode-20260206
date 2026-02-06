@@ -1,0 +1,37 @@
+{
+  "experiment_summary": "Task: Solve elementary arithmetic word problems by generating a chain-of-thought (CoT) rationale and a final numeric answer.\n\nPurpose: Demonstrate that C3-AutoCoT yields higher downstream problem-solving accuracy than PIR-AutoCoT by filtering out \"plausible but ungrounded\" candidate demonstrations during the demo construction stage.\n\nCore workflow:\n1) Demo pool: first 500 SVAMP training questions\n2) Clustering: SentenceTransformer embeddings + k-means (k=8)\n3) Demo selection: For each cluster, accept candidate demo if r=r_sc·r_pi·r_cc≥τ\n4) Evaluation: 200 test questions with fixed 8-demo prompt, greedy decoding",
+  "runner_config": {
+    "runner_label": ["self-hosted", "gpu-runner"],
+    "description": "NVIDIA H200, VRAM: 140 GB, RAM: 240 GB"
+  },
+  "evaluation_metrics": [
+    {
+      "name": "accuracy",
+      "description": "End-task correctness: proportion of test questions with correct final numeric answer. Extract predicted answer as last number in output; compare with gold answer."
+    },
+    {
+      "name": "demo_acceptance_rate",
+      "description": "Fraction of clusters that successfully accepted a demo candidate within top-T attempts."
+    },
+    {
+      "name": "mean_reliability_components",
+      "description": "Average values of r_sc (self-consistency), r_pi (paraphrase invariance), r_cc (cycle-consistency grounding) across accepted demos."
+    },
+    {
+      "name": "grounding_utility_correlation",
+      "description": "Correlation between r_cc and downstream accuracy per cluster (does grounding predict usefulness?)."
+    }
+  ],
+  "models_to_use": ["Qwen3-8B (8B parameters)"],
+  "datasets_to_use": ["SVAMP (MU-NLPC/Calc-svamp)"],
+  "proposed_method": {
+    "method_name": "C3-AutoCoT (Cycle-Consistent & Paraphrase-Invariant Reliability Auto-CoT)",
+    "description": "Inference-only enhancement to Auto-CoT demonstration construction. Estimate demo reliability along three label-free axes: (1) within-question self-consistency (r_sc), (2) paraphrase invariance with number-preservation filter (r_pi), and (3) cycle-consistency grounding (r_cc). Accept demo if r=r_sc·r_pi·r_cc≥τ."
+  },
+  "comparative_methods": [
+    {
+      "method_name": "PIR-AutoCoT (Paraphrase-Invariant Reliability Auto-CoT)",
+      "description": "Baseline that filters demos based on (1) within-question self-consistency and (2) paraphrase invariance. Does not include cycle-consistency grounding. Reliability: r=r_sc·r_pi."
+    }
+  ]
+}
