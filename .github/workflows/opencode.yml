@@ -6,7 +6,7 @@ on:
       model_name:
         description: 'Model to use (e.g., anthropic/claude-opus-4-6, openai/gpt-4, openrouter/openai/gpt-4)'
         required: false
-        default: 'anthropic/claude-opus-4-6'
+        default: 'anthropic/claude-sonnet-4-5'
         type: string
       max_retries:
         description: 'Maximum number of retry attempts'
