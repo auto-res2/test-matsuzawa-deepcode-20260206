@@ -1,0 +1,20 @@
+# Main Hydra configuration for C3-AutoCoT experiment
+
+defaults:
+  - _self_
+  - run: ???  # Must be specified via command line
+
+# WandB configuration
+wandb:
+  entity: ${oc.env:WANDB_ENTITY, ""}
+  project: "c3-autocot-experiment"
+  mode: "online"  # Set to "disabled" in trial mode
+
+# Results directory (overridden by CLI)
+results_dir: "./results"
+
+# Execution mode
+mode: "full"  # full or trial
+
+# Cache directory for models and datasets
+cache_dir: ".cache/"

@@ -1,0 +1,51 @@
+# @package _global_
+
+run_id: "pir-autocot-baseline"
+method: "PIR-AutoCoT"
+
+# Model configuration
+model:
+  name: "Qwen/Qwen2.5-Math-7B-Instruct"
+  max_new_tokens: 512
+  temperature: 0.7
+  top_p: 0.95
+  device: "cuda"
+
+# Dataset configuration
+dataset:
+  name: "MU-NLPC/Calc-svamp"
+  demo_pool_size: 500
+  test_size: 200
+  split_seed: 42
+
+# Method-specific parameters
+method_params:
+  # Clustering
+  num_clusters: 8
+  embedding_model: "sentence-transformers/all-MiniLM-L6-v2"
+  
+  # Demo selection
+  max_candidates_per_cluster: 10
+  reliability_threshold: 0.30
+  
+  # Reliability computation
+  num_samples: 4  # m in paper
+  num_paraphrases: 2  # p in paper
+  num_reconstruct_samples: 1
+  
+  # Components enabled (PIR does NOT use cycle consistency)
+  use_self_consistency: true
+  use_paraphrase_invariance: true
+  use_cycle_consistency: false  # Key difference from C3-AutoCoT
+
+# Training/Evaluation parameters
+evaluation:
+  batch_size: 1
+  num_seeds: 3
+  seeds: [42, 43, 44]
+  decoding_strategy: "greedy"
+
+# Computational settings
+compute:
+  dtype: "bfloat16"
+  max_memory_gb: 40
