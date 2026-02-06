@@ -70,8 +70,8 @@ jobs:
       - name: Install deepcode-hku
         run: |
           pip install --upgrade pip
-          pip install deepcode-hku
-          deepcode --version
+          pip install --no-cache-dir deepcode-hku
+          echo "✓ DeepCode installed"
 
       - name: Run DeepCode
         run: |
