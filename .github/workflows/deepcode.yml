@@ -3,18 +3,6 @@ name: "[Test] DeepCode Code Generation"
 on:
   workflow_dispatch:
     inputs:
-      hypothesis_json:
-        description: 'ResearchHypothesis as JSON string'
-        required: true
-        type: string
-      design_json:
-        description: 'ExperimentalDesign as JSON string'
-        required: true
-        type: string
-      custom_prompt:
-        description: 'Custom prompt for DeepCode (optional, if empty will auto-generate)'
-        required: false
-        type: string
       model_name:
         description: 'Model to use (e.g., claude-opus-4, claude-sonnet-4-5)'
         required: false
@@ -28,6 +16,7 @@ permissions:
 
 env:
   RESULTS_DIR: ".research/deepcode-results"
+  INPUTS_DIR: ".github/workflows/inputs"
 
 jobs:
   test-deepcode:
@@ -42,31 +31,41 @@ jobs:
       - name: Create results directory
         run: mkdir -p "$RESULTS_DIR"
 
-      - name: Validate and save input JSON
+      - name: Copy and validate input files
         run: |
-          # Validate hypothesis JSON
-          echo '${{ github.event.inputs.hypothesis_json }}' | jq . > "$RESULTS_DIR/hypothesis.json" || {
-            echo "ERROR: Invalid hypothesis JSON"
+          # Copy input files from repo
+          cp "$INPUTS_DIR/hypothesis.json" "$RESULTS_DIR/" || {
+            echo "ERROR: hypothesis.json not found in $INPUTS_DIR"
             exit 1
           }
-          echo "✓ Hypothesis JSON valid"
-
-          # Validate design JSON
-          echo '${{ github.event.inputs.design_json }}' | jq . > "$RESULTS_DIR/design.json" || {
-            echo "ERROR: Invalid design JSON"
+          cp "$INPUTS_DIR/design.json" "$RESULTS_DIR/" || {
+            echo "ERROR: design.json not found in $INPUTS_DIR"
             exit 1
           }
-          echo "✓ Design JSON valid"
+          cp "$INPUTS_DIR/prompt.txt" "$RESULTS_DIR/" || {
+            echo "ERROR: prompt.txt not found in $INPUTS_DIR"
+            exit 1
+          }
 
-      - name: Setup prompt
-        run: |
-          if [ -n '${{ github.event.inputs.custom_prompt }}' ]; then
-            echo '${{ github.event.inputs.custom_prompt }}' > "$RESULTS_DIR/prompt.txt"
-            echo "✓ Using custom prompt"
-          else
-            echo "⚠ No custom prompt provided"
-            echo "DeepCode will use internal default or CLI defaults"
-          fi
+          # Validate JSON files
+          jq . "$RESULTS_DIR/hypothesis.json" > /dev/null || {
+            echo "ERROR: Invalid hypothesis.json"
+            exit 1
+          }
+          echo "✓ hypothesis.json valid"
+
+          jq . "$RESULTS_DIR/design.json" > /dev/null || {
+            echo "ERROR: Invalid design.json"
+            exit 1
+          }
+          echo "✓ design.json valid"
+
+          # Check prompt file
+          [ -s "$RESULTS_DIR/prompt.txt" ] || {
+            echo "ERROR: prompt.txt is empty"
+            exit 1
+          }
+          echo "✓ prompt.txt valid ($(wc -l < "$RESULTS_DIR/prompt.txt") lines)"
 
       - name: Install deepcode-hku
         run: |
@@ -76,21 +75,13 @@ jobs:
 
       - name: Run DeepCode
         run: |
-          PROMPT_FILE="${{ env.RESULTS_DIR }}/prompt.txt"
           OUTPUT_DIR="${{ env.RESULTS_DIR }}/generated"
+          PROMPT_FILE="${{ env.RESULTS_DIR }}/prompt.txt"
 
-          # If custom prompt was provided, use it; otherwise pass empty
-          if [ -f "$PROMPT_FILE" ]; then
-            deepcode \
-              --model "${{ github.event.inputs.model_name }}" \
-              --prompt-file "$PROMPT_FILE" \
-              --output-dir "$OUTPUT_DIR"
-          else
-            echo "No prompt file provided, DeepCode will use defaults"
-            deepcode \
-              --model "${{ github.event.inputs.model_name }}" \
-              --output-dir "$OUTPUT_DIR"
-          fi
+          deepcode \
+            --model "${{ github.event.inputs.model_name }}" \
+            --prompt-file "$PROMPT_FILE" \
+            --output-dir "$OUTPUT_DIR"
 
       - name: Check results
         if: always()
@@ -104,7 +95,7 @@ jobs:
           fi
 
           echo ""
-          echo "=== Artifacts to download ==="
+          echo "=== Files in results directory ==="
           ls -lah "$RESULTS_DIR/"
 
       - name: Upload results
