@@ -165,3 +165,22 @@ jobs:
             src/
             .langfuse/
           retention-days: 30
+
+      - name: Commit and push LaTeX outputs (on success)
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git remote set-url origin "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}"
+          git add .
+
+          if ! git diff --staged --quiet; then
+            git commit -m "[CI] test"
+            for i in {1..5}; do
+              git pull --rebase -X theirs origin main
+              git push && break
+              echo "Push failed on attempt $i. Retrying in $((2**i)) seconds..."
+              sleep $((2**i))
+            done
+          else
+            echo "No changes were made by the agent."
+          fi
